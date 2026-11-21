@@ -1,33 +1,24 @@
-# Machine Round React Native: `01-minimal`
+# Walmart: UI component + horizontal FlatList
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+Built from `01-minimal`. Source: a Walmart Global Tech React Native interview (Nov 2024, [Medium](https://medium.com/@poonkuzhali_98336/walmart-global-tech-interview-experience-cdc3509408ea), summary only): in an RN playground, build a simple UI component and a horizontal FlatList; questions on using the right components and on package dependencies. Aim for 30–45 minutes.
 
-```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
-```
+## What is built
+- `ProductCard`: presentational, memoised, one accessibility label ("title, price, rated x out of 5"), image with placeholder, optional badge.
+- `ProductCarousel`: horizontal `FlatList` with snapping, separators, page dots that follow the first visible card, empty shelf hidden.
+- Home screen: a vertical `ScrollView` with two shelves.
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## Points to make in the round
+| Topic | Answer |
+|---|---|
+| FlatList vs ScrollView + map | FlatList virtualises (renders a window, recycles); `ScrollView` renders everything. A few small static items: ScrollView is fine. |
+| Horizontal `getItemLayout` | `length` is the item **width + gap**; enables instant `scrollToIndex` and skips measuring. |
+| Snapping | `snapToInterval={width + gap}` + `decelerationRate="fast"`; `pagingEnabled` only for full-width pages. |
+| `onViewableItemsChanged` | Must keep the same identity for the list's lifetime or FlatList throws "Changing onViewableItemsChanged on the fly is not supported": `useCallback` with stable deps, config as a module constant (tested). |
+| Nesting | Horizontal lists inside a vertical ScrollView are fine (different axes). A vertical FlatList inside a vertical ScrollView breaks virtualisation and warns. |
+| Re-renders | Module-level `keyExtractor`/`getItemLayout`/`Separator`, memoised card, stable `onPress`. |
+| Tuning | `initialNumToRender`, `windowSize`; for very long or image-heavy lists, FlashList (recycling) and `expo-image` (disk cache). |
+| Dependencies | Keep the component dependency-free; adding FlashList or a carousel library is a trade-off (native code, upgrades, bundle size) worth stating. |
+| Accessibility | Decorative dots hidden from screen readers; header role on the shelf title; card is one button with a full label. |
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
-
-Next: `git checkout 02-posts-list`.
+## Tests (12)
+Card label, press callback, horizontal layout maths, dots follow visibility with a stable callback identity, empty shelf hidden. Plus core tests and the app shell.
