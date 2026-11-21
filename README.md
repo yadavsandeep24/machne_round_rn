@@ -1,4 +1,19 @@
-# Machine Round React Native: `feature/post-detail`
+# Machine Round React Native: `feature/pagination-manual`
+
+> Diff against the previous step: `git diff feature/post-detail..feature/pagination-manual`
+
+## This step: hand-written load-more
+- **Trigger:** `FlatList` `onEndReached` with `onEndReachedThreshold={0.5}` (half a screen before the end).
+- **Guards in the thunk `condition`:** one load at a time, never while refreshing, never past the end, never before page 1 succeeded, and no automatic retry after an error (footer Retry passes `{ isRetry: true }`). `onEndReached` fires often; the guards make it harmless (tested with 3 concurrent dispatches → 1 request).
+- **Footer:** `LoadMoreFooter` spinner or error + Retry; hidden at the end.
+- **Refresh vs in-flight load-more:** every refresh bumps `generation`; a page that started under an older generation is dropped instead of being appended onto the new page 1 (tested with a gate).
+- **Dedupe by id** when appending. **Only page 1 is cached** for an instant, offline start.
+- **End of data:** a short page. Use `hasMore` / `total` / `nextCursor` if the API gives one.
+- Tests: 4 pagination tests. 23 total.
+
+---
+
+## Earlier step: `feature/post-detail`
 
 > Diff against the previous step: `git diff 02-posts-list..feature/post-detail`
 

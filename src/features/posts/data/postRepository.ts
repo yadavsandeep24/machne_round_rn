@@ -11,10 +11,21 @@ import { fetchComments, fetchPost, fetchPosts, PAGE_SIZE } from './postApi';
  * Offline-first: the screen shows the cache immediately, then the network
  * result replaces it and is written back to the cache.
  */
+export interface Page {
+  posts: Post[];
+  /** Fewer items than the page size came back. Prefer hasMore/total/nextCursor if the API has one. */
+  endReached: boolean;
+}
+
 export interface PostRepository {
   readCache(): Promise<Post[]>;
   /** Fetches page 1 and replaces the cache. */
-  refresh(): Promise<Result<Post[]>>;
+  refresh(): Promise<Result<Page>>;
+  /**
+   * Fetches page 2, 3, ... from the network. Only page 1 is cached: enough
+   * for an instant, offline start without stale gaps between pages.
+   */
+  loadPage(page: number): Promise<Result<Page>>;
   /** Cache first; network fallback for posts that were never cached (deep link, search). */
   getPost(id: number, signal?: AbortSignal): Promise<Result<Post>>;
   getComments(postId: number, signal?: AbortSignal): Promise<Result<Comment[]>>;
@@ -30,7 +41,12 @@ export function createPostRepository(http: AxiosInstance, store: KeyValueStore):
       safeCall(async () => {
         const posts = await fetchPosts(http, { page: 1, limit: PAGE_SIZE });
         await writeJson(store, CACHE_KEY, posts);
-        return posts;
+        return { posts, endReached: posts.length < PAGE_SIZE };
+      }),
+    loadPage: (page) =>
+      safeCall(async () => {
+        const posts = await fetchPosts(http, { page, limit: PAGE_SIZE });
+        return { posts, endReached: posts.length < PAGE_SIZE };
       }),
     getPost: async (id, signal) => {
       const cached = (await readCache()).find((p) => p.id === id);

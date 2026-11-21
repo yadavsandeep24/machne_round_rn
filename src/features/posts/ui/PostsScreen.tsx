@@ -5,11 +5,11 @@ import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { useAppDispatch, useAppSelector } from '../../../app/store';
 import { userMessage } from '../../../core/error/appError';
-import { EmptyView, ErrorView, LoadingView } from '../../../core/ui/StateViews';
+import { EmptyView, ErrorView, LoadingView, LoadMoreFooter } from '../../../core/ui/StateViews';
 import type { RootStackParamList } from '../../../navigation/RootNavigator';
 import { colors, spacing } from '../../../ui/theme';
 import type { Post } from '../domain/post';
-import { loadCachedPosts, refreshPosts } from '../state/postsSlice';
+import { loadCachedPosts, loadNextPage, refreshPosts } from '../state/postsSlice';
 import { PostRow, ROW_HEIGHT } from './PostRow';
 
 const keyExtractor = (p: Post) => String(p.id);
@@ -22,7 +22,8 @@ const getItemLayout = (_: unknown, index: number) => ({
 export function PostsScreen() {
   const dispatch = useAppDispatch();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { status, items, isRefreshing, error } = useAppSelector((s) => s.posts);
+  const { status, items, isRefreshing, error, isLoadingMore, hasReachedEnd, loadMoreError } =
+    useAppSelector((s) => s.posts);
 
   useEffect(() => {
     dispatch(loadCachedPosts());
@@ -32,6 +33,14 @@ export function PostsScreen() {
   const onRefresh = useCallback(() => {
     dispatch(refreshPosts());
   }, [dispatch]);
+  // The thunk's `condition` guards make repeated onEndReached calls harmless.
+  const onEndReached = useCallback(() => {
+    dispatch(loadNextPage());
+  }, [dispatch]);
+  const retryLoadMore = useCallback(() => {
+    dispatch(loadNextPage({ isRetry: true }));
+  }, [dispatch]);
+
   // Stable callbacks keep memoised rows from re-rendering.
   const openPost = useCallback((id: number) => navigation.navigate('PostDetail', { id }), [navigation]);
   const renderItem = useCallback(
@@ -58,6 +67,17 @@ export function PostsScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
         // Empty state inside the list so pull-to-refresh still works.
         ListEmptyComponent={<EmptyView message="No posts yet" />}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          hasReachedEnd ? undefined : (
+            <LoadMoreFooter
+              loading={isLoadingMore}
+              errorMessage={loadMoreError ? userMessage(loadMoreError) : undefined}
+              onRetry={retryLoadMore}
+            />
+          )
+        }
         contentContainerStyle={items.length === 0 ? styles.flex : undefined}
       />
     </View>
