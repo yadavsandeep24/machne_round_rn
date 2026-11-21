@@ -1,12 +1,14 @@
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 
+import favoritesReducer from '../features/favorites/favoritesSlice';
 import postsReducer from '../features/posts/state/postsSlice';
 import type { Services } from './services';
 
 // Feature reducers are registered here.
 const rootReducer = combineReducers({
   posts: postsReducer,
+  favorites: favoritesReducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

@@ -8,6 +8,8 @@ import { userMessage } from '../../../core/error/appError';
 import { useDebouncedValue } from '../../../core/hooks/useDebouncedValue';
 import { EmptyView, ErrorView, LoadingView, LoadMoreFooter } from '../../../core/ui/StateViews';
 import type { RootStackParamList } from '../../../navigation/RootNavigator';
+import { FavoriteButton } from '../../favorites/FavoriteButton';
+import { loadFavorites } from '../../favorites/favoritesSlice';
 import { colors, spacing } from '../../../ui/theme';
 import type { Post } from '../domain/post';
 import {
@@ -37,6 +39,7 @@ export function PostsScreen({ debounceMs = 300 }: { debounceMs?: number }) {
   const query = useDebouncedValue(text, debounceMs).trim();
 
   useEffect(() => {
+    dispatch(loadFavorites());
     dispatch(loadCachedPosts());
     dispatch(refreshPosts());
   }, [dispatch]);
@@ -70,7 +73,9 @@ export function PostsScreen({ debounceMs = 300 }: { debounceMs?: number }) {
     [navigation],
   );
   const renderItem = useCallback(
-    ({ item }: { item: Post }) => <PostRow post={item} onPress={openPost} />,
+    ({ item }: { item: Post }) => (
+      <PostRow post={item} onPress={openPost} right={<FavoriteButton id={item.id} />} />
+    ),
     [openPost],
   );
 

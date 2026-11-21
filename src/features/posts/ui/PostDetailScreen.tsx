@@ -1,9 +1,11 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useLayoutEffect } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { userMessage } from '../../../core/error/appError';
 import { ErrorView, LoadingView } from '../../../core/ui/StateViews';
 import type { RootStackParamList } from '../../../navigation/RootNavigator';
+import { FavoriteButton } from '../../favorites/FavoriteButton';
 import { colors, spacing } from '../../../ui/theme';
 import type { Comment } from '../domain/comment';
 import { usePostDetail } from './usePostDetail';
@@ -21,8 +23,13 @@ const renderComment = ({ item }: { item: Comment }) => (
   </View>
 );
 
-export function PostDetailScreen({ route }: Props) {
-  const { state, retry } = usePostDetail(route.params.id);
+export function PostDetailScreen({ route, navigation }: Props) {
+  const { id } = route.params;
+  const { state, retry } = usePostDetail(id);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerRight: () => <FavoriteButton id={id} /> });
+  }, [navigation, id]);
 
   switch (state.status) {
     case 'loading':
