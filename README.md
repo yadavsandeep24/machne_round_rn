@@ -1,84 +1,76 @@
-# Machine Round React Native: `feature/search-debounce`
+# Machine Round React Native
 
-> Diff against the previous step: `git diff feature/pagination-manual..feature/search-debounce`
+A starter project for **React Native machine coding rounds**: Expo SDK 58 (React Native 0.88, React 19), TypeScript strict, Redux Toolkit, React Navigation, axios, AsyncStorage, offline-first caching, manual pagination, debounced search with cancellation, and Jest + React Native Testing Library. It is the React Native counterpart of the Android and Flutter starters.
 
-## This step: server-side search with debounce and cancellation
-```
-keystroke ─► useState(text)           (input owns its text: typing never lags)
-          ─► useDebouncedValue(300ms)  (blank is instant)
-          ─► useEffect([query]):
-               const req = dispatch(searchPosts({ query }))
-               return () => req.abort()   ◄── next query / unmount aborts the HTTP request
-          thunk condition: skip if the same query already succeeded (distinct)
-```
-- **Why abort:** without it, a slow response for "re" can land after "react" and overwrite it (Rx/Bloc `switchMap`). The thunk passes its `signal` to axios; the reducer ignores `meta.aborted` rejections. Tested.
-- **Retry** dispatches the same query with `force: true`.
-- **Clearing** dispatches `searchCleared()` immediately and returns to the cached list.
-- **Results are not cached**; old results stay visible under a spinner while a new query loads.
-- **Local filtering instead?** Keep the debounce and filter `items` with a memoised selector.
-- **Testing gotcha:** RNTL 14 `fireEvent` is async: always `await fireEvent.changeText(...)`, otherwise the effects run outside `act` and fake timers seem to do nothing.
-- Tests: 4 slice tests (trimmed query, abort keeps newer results, distinct + force, error + clear) and 1 screen test (debounce into one request, empty result, clear). 28 total.
+The sample feature fetches posts from `jsonplaceholder.typicode.com`, caches them, and supports pagination, debounced server-side search, pull-to-refresh, favorites shared across screens, loading/error/empty states, and a detail screen with comments.
 
----
+## Branches
 
-## Earlier step: `feature/pagination-manual`
+**Step ladder.** Each branch builds on the previous one, so `git diff <prev>..<next>` shows exactly one feature:
 
-> Diff against the previous step: `git diff feature/post-detail..feature/pagination-manual`
+| Branch | What it adds |
+|---|---|
+| `00-empty` | Expo TS app, all dependencies, ESLint, Jest + RNTL working |
+| `01-minimal` | `AppError` union, `Result<T>`, `safeCall`, `KeyValueStore`, Redux store with DI via thunk `extraArgument`, shared state views, typed navigation |
+| `02-posts-list` | Offline-first list with Redux Toolkit: cache then network, loading/error/empty, pull-to-refresh, dropped duplicate refreshes |
+| `feature/post-detail` | Typed route params, local async hook with `AbortController`, parallel comments, network fallback |
+| `feature/pagination-manual` | `onEndReached` load-more with thunk `condition` guards, footer states, stale-page guard |
+| `feature/search-debounce` | Debounced search; the effect cleanup aborts the previous thunk (switchMap), distinct, retry |
+| `main` | Everything above + persisted favorites with per-row selectors, docs |
 
-## This step: hand-written load-more
-- **Trigger:** `FlatList` `onEndReached` with `onEndReachedThreshold={0.5}` (half a screen before the end).
-- **Guards in the thunk `condition`:** one load at a time, never while refreshing, never past the end, never before page 1 succeeded, and no automatic retry after an error (footer Retry passes `{ isRetry: true }`). `onEndReached` fires often; the guards make it harmless (tested with 3 concurrent dispatches → 1 request).
-- **Footer:** `LoadMoreFooter` spinner or error + Retry; hidden at the end.
-- **Refresh vs in-flight load-more:** every refresh bumps `generation`; a page that started under an older generation is dropped instead of being appended onto the new page 1 (tested with a gate).
-- **Dedupe by id** when appending. **Only page 1 is cached** for an instant, offline start.
-- **End of data:** a short page. Use `hasMore` / `total` / `nextCursor` if the API gives one.
-- Tests: 4 pagination tests. 23 total.
+**Problem branches** (each from `01-minimal`), chosen from **reported React Native rounds and fintech interview guides for your profile** (senior mobile, payments). Sources and caveats: [docs/INTERVIEW_RESEARCH.md](docs/INTERVIEW_RESEARCH.md).
 
----
+| Branch | Source | Problem |
+|---|---|---|
+| `jpmc/data-table-race-conditions` | JPMC/Barclays pair-programming report | Improve a data-fetching table: types, `useReducer`, race conditions (`AbortController` + request id), unmount, custom hook. Starter vs refactor with race tests. |
+| `safestreets/dice-roller-takehome` | SafeStreets' public senior take-home | Configurable dice, history newest first, persistence across restarts, modifiers, presets, accessibility, tests |
+| `practice/otp-countdown-timer` | Glassdoor "custom countdown timer" task | Deadline-based countdown, OTP input with autofill, resend cooldown that survives background and app kill |
+| `walmart/horizontal-list-component` | Walmart RN playground task | Memoised product card + snapping horizontal FlatList with viewability dots |
+| `fintech/payment-checkout-flow` | Fintech guides + your checkout/UPI background | Payment state machine, idempotency key, double-tap guard, polling with backoff (timeout = unknown, never failed), UPI return, relaunch recovery |
+| `fintech/transaction-history` | Fintech domain | Day-grouped SectionList, server filters, debounced search, cursor pagination with abort, money in minor units |
+| `fintech/secure-session` | Fintech guides (token storage) | Tokens in Keychain/Keystore (`expo-secure-store`), single-flight refresh interceptor, auth-flow navigation |
+| `practice/bugs-and-optimisation` | Senior debugging-round pattern | Top 10 React Native bugs and performance problems, Buggy vs Fixed with proving tests |
 
-## Earlier step: `feature/post-detail`
-
-> Diff against the previous step: `git diff 02-posts-list..feature/post-detail`
-
-## This step: detail screen with a local async hook
-- **Typed route params:** `PostDetail: { id: number }` in `RootStackParamList`; `NativeStackScreenProps` types `route.params`.
-- **Not everything belongs in Redux:** the detail screen uses `usePostDetail(id)` with local state. Contrast it with the posts slice when asked "when do you NOT use Redux?" (screen-local, not shared, not cached across screens).
-- **`AbortController` in `useEffect` cleanup:** leaving the screen or changing the id aborts the requests, so no state update lands on an unmounted screen and an old post never replaces a newer one (tested).
-- **Parallel requests:** `Promise.all` for post + comments. A comments failure shows inline and does not fail the screen.
-- **Cache first, network fallback** in `PostRepository.getPost` for posts that were never cached.
-- **`ServicesProvider` + `useServices()`:** hooks get the same services that thunks get as `extraArgument`.
-- **Stable `onPress`:** the list passes one `useCallback` to memoised rows, so opening a post does not re-render every row.
-- Tests: 5 more (open detail, comments failure, network fallback, not found, abort on id change). 19 total.
-
----
-
-## Earlier step: `02-posts-list`
-
-A basic feature on top of `01-minimal`: fetch posts from `jsonplaceholder.typicode.com`, cache them in AsyncStorage (offline-first), and show loading, error with Retry, empty and success states with pull-to-refresh. State: **Redux Toolkit**.
-
-```
-features/posts/
-  domain/post.ts             Post + parsePost (validates untrusted JSON)
-  data/postApi.ts            fetchPosts (axios, AbortSignal-ready)
-  data/postRepository.ts     PostRepository: readCache(), refresh() -> Result
-  state/postsSlice.ts        loadCachedPosts, refreshPosts thunks; status/items/isRefreshing/error
-  ui/PostsScreen.tsx         FlatList + RefreshControl + state views
-  ui/PostRow.tsx             memoised row with a fixed height
+```bash
+git checkout 02-posts-list && git checkout -b my-attempt
+git diff 02-posts-list..feature/post-detail
 ```
 
-## Data flow
+## Architecture
 ```
-mount ─► loadCachedPosts()  ─► cached items shown at once (status success)
-      └► refreshPosts()     ─► repo.refresh() ─► API ─► cache written ─► items replaced
+UI (screens, memoised rows)  ──dispatch──►  thunks (createAsyncThunk)  ──►  repositories  ──►  axios / AsyncStorage
+        ▲ useAppSelector                        │ extra = Services (DI)          │ Result<T>, AppError
+        └──────────── slices (state) ◄──────────┘
+hooks (useServices) for screen-local async state, e.g. the detail screen
 ```
-- **Offline-first:** an error with cached data shows a banner over the list; with no cache, the full-screen error + Retry.
-- **Race:** a slow cache read never overwrites fresher network data (tested).
-- **`condition` on the thunk:** pull-to-refresh spam makes one request (tested), like Bloc's `droppable()`.
-- **Serialisable state:** errors are stored without the raw `cause` (`toStateError`).
-- **FlatList basics:** stable `keyExtractor`, `getItemLayout` (fixed row height), memoised `renderItem` and row, empty state inside the list so pull-to-refresh still works.
+- **Dependency rule:** UI → state → data. Components never import axios; repositories return `Result<T>` with a typed `AppError`.
+- **DI:** `makeStore(services)` passes services as the thunk `extraArgument`; `ServicesProvider` gives the same services to hooks. Tests pass fakes.
+- **Offline-first:** the cache renders first; the network replaces it and writes it back.
 
-## Tests (14)
-`safeCall`/`mapError` (5), debounce hook (1), slice (5: success, empty-cache failure, cached-data failure, cache-vs-network race, dropped duplicate refresh), screen through the real `App` (3: data, error + Retry, empty).
+## Redux vs local state (both are in the project)
+| | Redux slice (`postsSlice`) | Local hook (`usePostDetail`) |
+|---|---|---|
+| Use it when | Shared, cached, or needed across screens | Screen-local, short-lived |
+| Concurrency | Thunk `condition` (drop duplicates), `promise.abort()` (cancel), generation counter (stale pages) | `AbortController` in the effect cleanup |
+| Errors | Serialisable `AppError` in state | `AppError` in local state |
 
-## Branch ladder
-`02-posts-list` → `feature/post-detail` → `feature/pagination-manual` → `feature/search-debounce` → `main`. `git diff <prev>..<next>` shows exactly one feature.
+## Things interviewers look for (already handled)
+- Loading, error with Retry, empty and success states; cached data kept on network failure
+- `FlatList` done right: stable `keyExtractor`, `getItemLayout`, memoised `renderItem` and rows, empty state inside the list
+- Stable callbacks (`useCallback`) so `memo` works; narrow selectors so a like doesn't re-render the list
+- Cancellation everywhere (`AbortController`, thunk abort); no state updates after unmount
+- Typed navigation params; data passed by id with a fetch fallback
+- Tests through the real `App` with fake services, plus slice and hook tests
+
+## Testing notes (React Native Testing Library 14 + React 19)
+- `render`, `renderHook` and `fireEvent` are **async**: always `await` them, or effects run outside `act` and fake timers appear to do nothing.
+- Don't run two `fireEvent`s concurrently (`Promise.all`): overlapping `act` scopes break later tests. Test same-frame double taps at the hook level.
+- An aborted promise inside an awaited `fireEvent` can hang under Jest fake timers; use short real delays for abort/race tests.
+- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
+
+## Run
+```bash
+npm install
+npm start           # Expo dev server: a = Android, i = iOS, w = web
+npm run check       # typecheck + lint + tests
+```
