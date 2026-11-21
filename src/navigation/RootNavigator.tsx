@@ -1,26 +1,16 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
 
-export type RootStackParamList = {
-  Home: undefined;
-};
+import { ChallengeListScreen, ChallengeScreen } from '../challenges/ChallengesScreens';
+
+export type RootStackParamList = { Challenges: undefined; Challenge: { id: number } };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-function HomePlaceholder() {
-  return (
-    <View style={styles.center}>
-      <Text>Add your first feature in src/features/</Text>
-    </View>
-  );
-}
 
 export function RootNavigator() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={HomePlaceholder} options={{ title: 'Machine Round' }} />
+      <Stack.Screen name="Challenges" component={ChallengeListScreen} options={{ title: 'Bugs & optimisation: top 10' }} />
+      <Stack.Screen name="Challenge" component={ChallengeScreen} options={{ title: 'Challenge' }} />
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center' } });
