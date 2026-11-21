@@ -1,33 +1,26 @@
-# Machine Round React Native: `01-minimal`
+# Fintech: transaction history
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+Built from `01-minimal`. A **domain problem**: the most common list screen in any payments or banking app, and the same task as lesson 11 in your Flutter prep. Fintech guides also probe money precision and real-time list performance ([Trio](https://trio.dev/what-to-ask-react-developer-fintech/)). Aim for 60–90 minutes.
 
-```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
-```
+## What is built
+- `SectionList` grouped by **local** calendar day ("Today", "Yesterday", "3 Nov", "31 Dec 2025") with sticky headers and a per-day net (successful transactions only).
+- Server-side filters: Received / Paid, Pending / Failed, and debounced search on name or note.
+- **Cursor pagination** (`nextCursor`), footer spinner / error + Retry, pull-to-refresh.
+- Signed INR amounts from integer paise (`+₹1,250.00`, `−₹250.50`), tabular digits, failed amounts struck through, pending/failed badges.
+- One accessibility label per row: "Paid to Swiggy, −₹250.00, 10:30, failed".
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## Points to make in the round
+| Topic | Answer |
+|---|---|
+| Cursor vs page number | New transactions arrive at the top; offset paging then repeats or skips rows. A cursor (last id / timestamp) stays correct. Dedupe by id anyway. |
+| Filter change | A new query: reset, **abort** the in-flight first page or load-more for the old filter, start again (tested). |
+| Timezones | The server sends UTC; group by the user's local day (`dayKey`), otherwise late-night payments land under the wrong date. |
+| Money | Integer minor units, `Intl.NumberFormat('en-IN')` for lakh/crore grouping; never sum floats. |
+| Derived data | `groupByDay` runs in `useMemo` on the item list, not on every render; rows and headers are memoised. |
+| Big lists | `initialNumToRender`, `getItemLayout` needs fixed heights (headers make it harder); FlashList for thousands of rows. |
+| Real time | New transactions via push/WebSocket: prepend with dedupe and keep the scroll position (`maintainVisibleContentPosition`). |
+| Offline | Cache the first page (MMKV/SQLite) for an instant start; label it "Last updated …". |
+| Privacy | Mask account numbers/VPAs; respect a "hide balances" setting; no PII in analytics. |
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
-
-Next: `git checkout 02-posts-list`.
+## Tests (15)
+Domain (3): Today/Yesterday/dates grouping in order, net counts only successes, signed INR formatting. Screen (5): grouping + cursor pages to the end, filter change aborts and restarts, server-side search + empty state, first-page error + Retry, row accessibility label. Plus core tests and the app shell.

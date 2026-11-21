@@ -1,26 +1,21 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
 
-export type RootStackParamList = {
-  Home: undefined;
-};
+import { createFakeTxnApi, makeTransactions } from '../features/txns/data/txnApi';
+import { TransactionsScreen } from '../features/txns/ui/TransactionsScreen';
+
+export type RootStackParamList = { Transactions: undefined };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const api = createFakeTxnApi(makeTransactions(200));
 
-function HomePlaceholder() {
-  return (
-    <View style={styles.center}>
-      <Text>Add your first feature in src/features/</Text>
-    </View>
-  );
+function TransactionsRoute() {
+  return <TransactionsScreen api={api} />;
 }
 
 export function RootNavigator() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={HomePlaceholder} options={{ title: 'Machine Round' }} />
+      <Stack.Screen name="Transactions" component={TransactionsRoute} />
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center' } });
