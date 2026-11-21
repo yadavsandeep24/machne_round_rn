@@ -1,33 +1,34 @@
-# Machine Round React Native: `01-minimal`
+# Fintech: payment checkout flow (state machine, idempotency, polling)
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+Built from `01-minimal`. A **domain problem**: no candidate report names this exact task, but fintech interview guides say payment flows must treat the backend as the source of truth with explicit client states ([DEV RN handbook, part 4](https://dev.to/amitkumar13/react-native-interview-handbook-part-4-of-5-performance-architecture-3cjh)) and probe money precision and payment integrity ([Trio](https://trio.dev/what-to-ask-react-developer-fintech/)). It is also the core of your resume (in-app checkout, UPI intent). Expect it as a machine-coding task or as the "design + code a piece" part of a senior fintech loop.
 
+## The state machine (`domain/paymentMachine.ts`, pure and unit-tested)
 ```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
+idle ──PAY──► initiating ──CREATED(url)──► awaitingAuthorization ──AUTH_RETURNED──► processing
+                 │        └─CREATED──────────────────────────────────────────────►   │
+                 └─CREATE_FAILED──► failed ◄──STATUS(failed)───────────────────────────┤
+                                     │ RESET ► idle                                    ├─STATUS(succeeded)─► succeeded (final)
+                                                                    TIMED_OUT ─► unknown ─STATUS(succeeded)─┘
 ```
+Illegal events are ignored (a second `PAY` while initiating, anything after `succeeded`).
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## The rules it enforces
+| Rule | Why | Where |
+|---|---|---|
+| **Timeout = UNKNOWN, never FAILED** | "Failed" for a payment that went through makes users pay twice | `TIMED_OUT` → `unknown`, UI says "You will not be charged twice", Check status button |
+| **Idempotency key per attempt** | A lost `create` response is retried with the **same** key, so the server returns the same payment | `usePayment.pay`; tested: two calls, one payment |
+| **New key only after a definite failure** | A declined card is a new attempt | tested: `key_1`, then `key_2` |
+| **Double tap** | Second tap in the same frame is ignored before React re-renders | `stateRef` guard + machine; tested at hook level |
+| **Polling with backoff** | 1, 2, 4, 8, 15, 30 s (about 60 s), network errors while polling are not failures | `poll()` |
+| **UPI intent / 3DS** | Open the app with `Linking.openURL`; resume status checks when `AppState` becomes `active` | tested |
+| **App killed mid-payment** | In-flight payment saved; relaunch re-checks it | tested |
+| **Money** | Integer minor units, `Intl.NumberFormat` (`₹588.82`), currency-mismatch guard | `domain/money.ts` |
+| **PCI scope** | Card entry stays inside the gateway's SDK / hosted fields; the app never sees the PAN | UI copy |
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
+## What to say about the real system
+- The server also confirms via **webhook**; polling is the client's view. The final truth is the server's order status.
+- Never log card data, UPI VPA or tokens; mask in analytics.
+- UPI: use the PSP SDK or intent with a server-generated transaction reference; verify the status on the server, never trust the UPI app's return payload alone.
 
-Next: `git checkout 02-posts-list`.
+## Tests (18)
+Machine (5): happy path, double PAY ignored, timeout → unknown then late success, success is final, money. Screen/hook (6): UPI flow with app return, double tap → one payment, lost response → same key and one payment, polling budget → unknown → Check status, decline → new key, relaunch re-checks a saved payment. Plus core tests and the app shell.
