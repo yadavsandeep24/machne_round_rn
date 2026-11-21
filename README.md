@@ -1,4 +1,20 @@
-# Machine Round React Native: `02-posts-list`
+# Machine Round React Native: `feature/post-detail`
+
+> Diff against the previous step: `git diff 02-posts-list..feature/post-detail`
+
+## This step: detail screen with a local async hook
+- **Typed route params:** `PostDetail: { id: number }` in `RootStackParamList`; `NativeStackScreenProps` types `route.params`.
+- **Not everything belongs in Redux:** the detail screen uses `usePostDetail(id)` with local state. Contrast it with the posts slice when asked "when do you NOT use Redux?" (screen-local, not shared, not cached across screens).
+- **`AbortController` in `useEffect` cleanup:** leaving the screen or changing the id aborts the requests, so no state update lands on an unmounted screen and an old post never replaces a newer one (tested).
+- **Parallel requests:** `Promise.all` for post + comments. A comments failure shows inline and does not fail the screen.
+- **Cache first, network fallback** in `PostRepository.getPost` for posts that were never cached.
+- **`ServicesProvider` + `useServices()`:** hooks get the same services that thunks get as `extraArgument`.
+- **Stable `onPress`:** the list passes one `useCallback` to memoised rows, so opening a post does not re-render every row.
+- Tests: 5 more (open detail, comments failure, network fallback, not found, abort on id change). 19 total.
+
+---
+
+## Earlier step: `02-posts-list`
 
 A basic feature on top of `01-minimal`: fetch posts from `jsonplaceholder.typicode.com`, cache them in AsyncStorage (offline-first), and show loading, error with Retry, empty and success states with pull-to-refresh. State: **Redux Toolkit**.
 

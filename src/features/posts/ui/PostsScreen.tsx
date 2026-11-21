@@ -1,9 +1,12 @@
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback, useEffect } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { useAppDispatch, useAppSelector } from '../../../app/store';
 import { userMessage } from '../../../core/error/appError';
 import { EmptyView, ErrorView, LoadingView } from '../../../core/ui/StateViews';
+import type { RootStackParamList } from '../../../navigation/RootNavigator';
 import { colors, spacing } from '../../../ui/theme';
 import type { Post } from '../domain/post';
 import { loadCachedPosts, refreshPosts } from '../state/postsSlice';
@@ -18,6 +21,7 @@ const getItemLayout = (_: unknown, index: number) => ({
 
 export function PostsScreen() {
   const dispatch = useAppDispatch();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { status, items, isRefreshing, error } = useAppSelector((s) => s.posts);
 
   useEffect(() => {
@@ -28,7 +32,12 @@ export function PostsScreen() {
   const onRefresh = useCallback(() => {
     dispatch(refreshPosts());
   }, [dispatch]);
-  const renderItem = useCallback(({ item }: { item: Post }) => <PostRow post={item} />, []);
+  // Stable callbacks keep memoised rows from re-rendering.
+  const openPost = useCallback((id: number) => navigation.navigate('PostDetail', { id }), [navigation]);
+  const renderItem = useCallback(
+    ({ item }: { item: Post }) => <PostRow post={item} onPress={openPost} />,
+    [openPost],
+  );
 
   if (status === 'loading') return <LoadingView />;
   if (status === 'failure') {
