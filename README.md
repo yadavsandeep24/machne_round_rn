@@ -1,33 +1,22 @@
-# Machine Round React Native: `01-minimal`
+# SafeStreets: Dice Roller take-home (senior tier)
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+Built from `01-minimal`. Source: **SafeStreets' own public take-home** for mid-level and senior React Native engineers ([GitHub](https://github.com/SSDevelopment/takeHomeAssessment-reactNativeEngineer)). 4-hour hard cap, Expo starter with one die and a Roll button, submitted as a PR, then a code walkthrough interview. Seniors must finish tiers 1–3; tier 4 items impress.
 
-```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
-```
+| Tier | Requirement | Where |
+|---|---|---|
+| 1 | 1–20 dice, die type d4/d6/d8/d10/d12/d20, show each die and the sum | `domain/dice.ts`, `ui/DiceScreen.tsx` |
+| 2 | History newest first: notation (`3d6`), dice, total, time; Clear | `ui/useDiceRoller.ts` |
+| 3 | History survives restart; empty first launch handled | `data/historyStore.ts` |
+| 4 | Modifiers (`3d6+2`), saved presets (long-press to remove), accessibility, tests | across the feature |
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## Decisions to explain in the walkthrough
+- **Pure domain module** (`dice.ts`): rolling, normalising and notation parsing have no React, so they are unit-tested directly. The RNG and clock are injected for deterministic tests.
+- **Edge cases they grade:** 0 dice, 10,000 dice, NaN, an invalid die and a huge modifier are normalised (`normalize`); rapid taps are each a synchronous dispatch with a unique id (counter, not just the timestamp), so none is lost.
+- **Persistence choice:** AsyncStorage JSON. History is small, append-only and read once at launch, so SQLite is overkill; MMKV would be the upgrade if it grew. Capped at 100 entries.
+- **Load/save race:** saving starts only after the load finished, so the empty initial state can never overwrite saved history; a roll made while loading is merged, not lost.
+- **Corrupt storage** falls back to an empty history instead of crashing.
+- **Accessibility:** steppers are `adjustable` with increment/decrement actions (VoiceOver swipe up/down), die chips are a `radiogroup`, the result is a polite live region announcing dice and total, buttons have labels and disabled states.
+- **Uniform randomness:** `floor(rng * sides) + 1` for `rng` in [0, 1). Mention `crypto.getRandomValues` if fairness mattered (for example, real-money games).
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
-
-Next: `git checkout 02-posts-list`.
+## Tests (16)
+Domain (4): rolling + modifier, uniform coverage, normalised edge cases, notation round-trip. Screen (5): empty first launch, configure and roll 3d6+2, five rapid taps all recorded, history survives restart then clears, presets. Plus core tests and the app shell.

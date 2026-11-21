@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react-native';
 import App from '../App';
 import { testServices } from '../test/testServices';
 
-test('app shell renders the home route', async () => {
+test('app opens the dice roller', async () => {
   await render(<App services={testServices()} />);
-  expect(await screen.findByText('Add your first feature in src/features/')).toBeTruthy();
+  expect(await screen.findByText('Roll 2d6')).toBeTruthy();
 });

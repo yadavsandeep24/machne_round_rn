@@ -1,26 +1,24 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
 
-export type RootStackParamList = {
-  Home: undefined;
-};
+import { useServices } from '../app/ServicesContext';
+import { createDiceStorage } from '../features/dice/data/historyStore';
+import { DiceScreen } from '../features/dice/ui/DiceScreen';
+
+export type RootStackParamList = { Dice: undefined };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function HomePlaceholder() {
-  return (
-    <View style={styles.center}>
-      <Text>Add your first feature in src/features/</Text>
-    </View>
-  );
+function DiceRoute() {
+  const { store } = useServices();
+  const storage = useMemo(() => createDiceStorage(store), [store]);
+  return <DiceScreen storage={storage} />;
 }
 
 export function RootNavigator() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={HomePlaceholder} options={{ title: 'Machine Round' }} />
+      <Stack.Screen name="Dice" component={DiceRoute} options={{ title: 'Dice Roller' }} />
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center' } });
