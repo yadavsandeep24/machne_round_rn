@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react-native';
 import App from '../App';
 import { testServices } from '../test/testServices';
 
-test('app shell renders the home route', async () => {
+test('app shell renders the users table demo', async () => {
   await render(<App services={testServices()} />);
-  expect(await screen.findByText('Add your first feature in src/features/')).toBeTruthy();
+  expect(await screen.findByText('Get all users')).toBeTruthy();
 });

@@ -1,33 +1,32 @@
-# Machine Round React Native: `01-minimal`
+# JPMC / Barclays: refactor a data-fetching table (pair programming)
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+Built from `01-minimal`. Source: a candidate write-up of React pair-programming rounds at **JPMorgan Chase and Barclays** ([DEV](https://dev.to/aajinkya/coding-challenges-in-react-5bnn)). You get a working users table (list + per-row "Details") and are asked "how would you improve it?". This is the React Native version.
 
-```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
-```
+## Files
+- `starter/DataTableStarter.tsx`: what the interviewer hands you, **bugs kept on purpose** and listed at the top of the file.
+- `refactored/useRequest.ts`: reusable "latest request wins" hook (`useReducer`, `AbortController`, request id in a ref, abort on unmount).
+- `refactored/DataTable.tsx`: the improved screen.
+- The app has a toggle to switch between the two.
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## The discussion points (in the order they usually come up)
+| # | Problem in the starter | Refactor |
+|---|---|---|
+| 1 | `any` everywhere | `User`, `UsersApi` interfaces |
+| 2 | Three `useState`s can contradict (loading + error) | One `RequestState` union via `useReducer` |
+| 3 | **Race:** slow user-1 response overwrites user 2 | Abort the previous request **and** ignore responses whose id is not the latest |
+| 4 | Responses land after leaving the screen | Abort in the effect cleanup on unmount |
+| 5 | `fetch` does not reject on 404/500 | `if (!res.ok) throw` in `getJson` |
+| 6 | Inline arrows per row defeat `memo` | One stable `useCallback`, memoised `UserRow` |
+| 7 | Copy-pasted fetch logic in the component | `useRequest` hook + injected `UsersApi` (testable, reusable) |
+| 8 | List disappears while reloading / on error | State keeps `previous` data |
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
+**Why both abort and request id?** Abort saves bandwidth and work, but some APIs or libraries ignore the signal; the id check guarantees correctness either way.
 
-Next: `git checkout 02-posts-list`.
+**`useState` vs `useReducer`:** use a reducer when several values change together or the next state depends on the previous one; it also makes impossible states unrepresentable.
+
+**In a real app:** TanStack Query (or RTK Query) gives you caching, dedupe, cancellation and retries; say so, then show you understand what it does underneath.
+
+## Tests (11)
+Race bug reproduced in the starter, fixed in the refactor (stale request aborted); unmount aborts; HTTP error shown while the list stays. Plus core tests and the app shell.
+
+> Testing note: the race tests use short real delays. With Jest fake timers, an aborted promise inside RNTL 14's async `fireEvent` never settles and the test hangs.
