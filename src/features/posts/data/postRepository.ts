@@ -29,6 +29,8 @@ export interface PostRepository {
   /** Cache first; network fallback for posts that were never cached (deep link, search). */
   getPost(id: number, signal?: AbortSignal): Promise<Result<Post>>;
   getComments(postId: number, signal?: AbortSignal): Promise<Result<Comment[]>>;
+  /** Server-side search. Not cached. */
+  search(query: string, signal?: AbortSignal): Promise<Result<Post[]>>;
 }
 
 const CACHE_KEY = 'posts_cache_v1';
@@ -53,5 +55,7 @@ export function createPostRepository(http: AxiosInstance, store: KeyValueStore):
       return cached ? ok(cached) : safeCall(() => fetchPost(http, id, signal));
     },
     getComments: (postId, signal) => safeCall(() => fetchComments(http, postId, signal)),
+    search: (query, signal) =>
+      safeCall(() => fetchPosts(http, { page: 1, limit: PAGE_SIZE, query, signal })),
   };
 }

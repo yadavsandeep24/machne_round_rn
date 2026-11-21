@@ -1,4 +1,27 @@
-# Machine Round React Native: `feature/pagination-manual`
+# Machine Round React Native: `feature/search-debounce`
+
+> Diff against the previous step: `git diff feature/pagination-manual..feature/search-debounce`
+
+## This step: server-side search with debounce and cancellation
+```
+keystroke ─► useState(text)           (input owns its text: typing never lags)
+          ─► useDebouncedValue(300ms)  (blank is instant)
+          ─► useEffect([query]):
+               const req = dispatch(searchPosts({ query }))
+               return () => req.abort()   ◄── next query / unmount aborts the HTTP request
+          thunk condition: skip if the same query already succeeded (distinct)
+```
+- **Why abort:** without it, a slow response for "re" can land after "react" and overwrite it (Rx/Bloc `switchMap`). The thunk passes its `signal` to axios; the reducer ignores `meta.aborted` rejections. Tested.
+- **Retry** dispatches the same query with `force: true`.
+- **Clearing** dispatches `searchCleared()` immediately and returns to the cached list.
+- **Results are not cached**; old results stay visible under a spinner while a new query loads.
+- **Local filtering instead?** Keep the debounce and filter `items` with a memoised selector.
+- **Testing gotcha:** RNTL 14 `fireEvent` is async: always `await fireEvent.changeText(...)`, otherwise the effects run outside `act` and fake timers seem to do nothing.
+- Tests: 4 slice tests (trimmed query, abort keeps newer results, distinct + force, error + clear) and 1 screen test (debounce into one request, empty result, clear). 28 total.
+
+---
+
+## Earlier step: `feature/pagination-manual`
 
 > Diff against the previous step: `git diff feature/post-detail..feature/pagination-manual`
 

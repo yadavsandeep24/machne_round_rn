@@ -19,7 +19,7 @@ test('shows the error with Retry, and Retry recovers', async () => {
   expect(await screen.findByText(/No internet connection/)).toBeTruthy();
 
   repo.failWith = undefined;
-  fireEvent.press(screen.getByText('Retry'));
+  await fireEvent.press(screen.getByText('Retry'));
   expect(await screen.findByText('Post 1')).toBeTruthy();
 });
 

@@ -21,6 +21,11 @@ export interface PostsState {
   loadMoreError?: AppError;
   /** Bumped by every refresh, so a page that started earlier is dropped. */
   generation: number;
+  /** Trimmed query the results belong to. Empty = browse mode. */
+  query: string;
+  searchStatus: 'idle' | Status;
+  searchResults: Post[];
+  searchError?: AppError;
 }
 
 const initialState: PostsState = {
@@ -31,6 +36,9 @@ const initialState: PostsState = {
   isLoadingMore: false,
   hasReachedEnd: false,
   generation: 0,
+  query: '',
+  searchStatus: 'idle',
+  searchResults: [],
 };
 
 type Rejectable = ThunkConfig & { rejectValue: AppError };
@@ -80,10 +88,38 @@ export const loadNextPage = createAsyncThunk<
   },
 );
 
+/**
+ * The component debounces the text and aborts the previous thunk when a new
+ * query arrives (`promise.abort()`), which aborts the HTTP request through
+ * `signal`. That is Bloc's debounce + switchMap / Rx's switchMap in Redux.
+ */
+export const searchPosts = createAsyncThunk<Post[], { query: string; force?: boolean }, Rejectable>(
+  'posts/search',
+  async ({ query }, { extra, signal, rejectWithValue }) => {
+    const result = await extra.postRepository.search(query.trim(), signal);
+    return result.ok ? result.data : rejectWithValue(toStateError(result.error));
+  },
+  {
+    // distinctUntilChanged: "react" -> "reac" -> "react" sends no new request.
+    condition: ({ query, force }, { getState }) => {
+      const s = getState().posts;
+      return !!force || !(query.trim() === s.query && s.searchStatus === 'success');
+    },
+  },
+);
+
 const postsSlice = createSlice({
   name: 'posts',
   initialState,
-  reducers: {},
+  reducers: {
+    /** Clearing is instant and returns to the cached browse list. */
+    searchCleared(state) {
+      state.query = '';
+      state.searchStatus = 'idle';
+      state.searchResults = [];
+      state.searchError = undefined;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(loadCachedPosts.fulfilled, (state, { payload }) => {
@@ -128,8 +164,24 @@ const postsSlice = createSlice({
       .addCase(loadNextPage.rejected, (state, { payload }) => {
         state.isLoadingMore = false;
         state.loadMoreError = payload ?? { kind: 'unknown' };
+      })
+      .addCase(searchPosts.pending, (state, { meta }) => {
+        state.query = meta.arg.query.trim();
+        state.searchStatus = 'loading';
+        state.searchError = undefined;
+      })
+      .addCase(searchPosts.fulfilled, (state, { payload, meta }) => {
+        if (meta.arg.query.trim() !== state.query) return; // belt and braces
+        state.searchStatus = 'success';
+        state.searchResults = payload;
+      })
+      .addCase(searchPosts.rejected, (state, { payload, meta }) => {
+        if (meta.aborted || meta.arg.query.trim() !== state.query) return; // superseded
+        state.searchStatus = 'failure';
+        state.searchError = payload ?? { kind: 'unknown' };
       });
   },
 });
 
+export const { searchCleared } = postsSlice.actions;
 export default postsSlice.reducer;

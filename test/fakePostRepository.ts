@@ -72,4 +72,18 @@ export class FakePostRepository implements PostRepository {
     if (this.commentsFailWith) return err<Comment[]>(this.commentsFailWith);
     return ok<Comment[]>([{ id: postId * 10, name: 'Commenter', email: 'a@b.c', body: 'Nice post' }]);
   }
+
+  searchedQueries: string[] = [];
+  searchFailWith?: AppError;
+  searchDelays = new Map<string, number>();
+
+  async search(query: string, signal?: AbortSignal) {
+    this.searchedQueries.push(query);
+    const delay = this.searchDelays.get(query);
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    if (signal?.aborted) return err<Post[]>({ kind: 'cancelled' });
+    if (this.searchFailWith) return err<Post[]>(this.searchFailWith);
+    const q = query.toLowerCase();
+    return ok(this.remote.filter((p) => p.title.toLowerCase().includes(q)));
+  }
 }
