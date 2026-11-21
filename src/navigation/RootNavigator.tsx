@@ -1,26 +1,30 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
 
-export type RootStackParamList = {
-  Home: undefined;
-};
+import { LoadingView } from '../core/ui/StateViews';
+import { useAuth } from '../features/auth/ui/AuthContext';
+import { LoginScreen } from '../features/auth/ui/LoginScreen';
+import { ProfileScreen } from '../features/auth/ui/ProfileScreen';
+
+export type RootStackParamList = { Login: undefined; Profile: undefined };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function HomePlaceholder() {
-  return (
-    <View style={styles.center}>
-      <Text>Add your first feature in src/features/</Text>
-    </View>
-  );
-}
-
+/**
+ * React Navigation's auth-flow pattern: render different screens for each
+ * auth state instead of navigating imperatively. Signing out (or an expired
+ * refresh token) swaps the stack, and the back button cannot return to a
+ * protected screen.
+ */
 export function RootNavigator() {
+  const { status } = useAuth();
+  if (status === 'restoring') return <LoadingView />;
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={HomePlaceholder} options={{ title: 'Machine Round' }} />
+      {status === 'signedIn' ? (
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+      ) : (
+        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+      )}
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center' } });

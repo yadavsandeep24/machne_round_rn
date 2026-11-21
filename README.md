@@ -1,33 +1,23 @@
-# Machine Round React Native: `01-minimal`
+# Fintech: secure session (Keychain/Keystore tokens, single-flight refresh)
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+Built from `01-minimal`. Why: fintech React Native interview guides single out token storage, and **"store tokens in AsyncStorage" is called out as a common wrong answer** ([Trio RN hiring guide](https://trio.dev/react-native-hiring-guide/)). Security dominates fintech loops (your targets include Navi mobile security, NPCI, Mastercard). API: dummyjson auth (`/auth/login`, `/auth/refresh`, `/auth/me`; use the demo account in the [dummyjson auth docs](https://dummyjson.com/docs/auth)).
 
-```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
-```
+## What is built
+- `createSecureTokenStore`: tokens in **`expo-secure-store`** (iOS Keychain / Android Keystore-backed), `WHEN_UNLOCKED_THIS_DEVICE_ONLY` (not restored onto another device from a backup), in-memory copy for the interceptor.
+- `installAuthInterceptor` on the authenticated axios instance: bearer header; on 401 one **single-flight** refresh shared by all parallel requests; the retried request is marked so it cannot loop; only 400/401/403 from refresh ends the session, a 5xx/network error keeps it.
+- Refresh uses a **separate plain axios** instance, so it can never recurse into itself.
+- React Navigation **auth-flow pattern**: screens are chosen by auth state (restoring → splash, signed out → Login, signed in → Profile); sign-out or an expired refresh swaps the stack and back cannot reach a protected screen.
+- Login: validation, show/hide password, autofill hints (`username`, `current-password`), double-submit guard, one generic "Wrong username or password".
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## Points to make in the round
+| Question | Answer |
+|---|---|
+| Where do tokens go? | Keychain/Keystore (`expo-secure-store`, `react-native-keychain`). AsyncStorage is unencrypted files. MMKV can encrypt, but its key must itself come from the Keychain. |
+| Access token lifetime? | Short (minutes), kept in memory; refresh token in secure storage, rotated on every refresh. |
+| Refresh concurrency? | Share one in-flight promise; retry each request once (tested: 5 parallel 401s → 1 refresh). |
+| When to log out? | Only when the refresh endpoint rejects the refresh token (tested), never on a network error. |
+| Biometrics? | `expo-local-authentication` gate on app resume; or store the refresh token with `requireAuthentication` so the Keychain itself asks for Face ID. |
+| More hardening | Certificate pinning for payment APIs, jailbreak/root signals, blur the app switcher snapshot, block screenshots on sensitive screens (Android `FLAG_SECURE`), no tokens or PII in logs/crash reports, Hermes bytecode is not obfuscation, so no secrets in the bundle. |
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
-
-Next: `git checkout 02-posts-list`.
+## Tests (13)
+Interceptor (3): parallel 401s → one refresh, rejected refresh → cleared + expired callback, 5xx refresh keeps the session. Flow (4): validation, generic wrong-password message, sign in → profile with tokens in SecureStore and **nothing in AsyncStorage**, restore at launch and log out. Plus core tests.
