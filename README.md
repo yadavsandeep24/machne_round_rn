@@ -1,33 +1,24 @@
-# Machine Round React Native: `01-minimal`
+# Countdown timer → OTP verification with resend cooldown
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+Built from `01-minimal`. Source: a React Native interview reported on Glassdoor with "a machine coding question … a task of making a custom countdown timer" ([summary](https://www.glassdoor.ca/Interview/React-Native-and-React-Basic-concepts-a-machine-coding-question-using-graphs-a-task-of-making-a-custom-countdown-timer-an-QTN_7436095.htm); page not readable automatically). Built as the countdown you would actually ship in a fintech app: the OTP screen. Demo code: `123456`.
 
-```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
-```
+## What is built
+- `useCountdown(deadline)`: counts down to an **absolute deadline**, re-computed every second and when the app returns to the foreground.
+- 6-digit OTP input: one hidden `TextInput` behind six boxes; paste, iOS `oneTimeCode` and Android `sms-otp` autofill; non-digits stripped ("Your code is 123 456" works).
+- Auto-submit at 6 digits, guarded so paste + autofill send **one** request.
+- Resend cooldown (30 s), code expiry (5 min), resend limit (3), attempt limit (5) with lockout, friendly messages.
+- Challenge persisted, so **killing the app does not reset the cooldown** (anti-abuse).
+- Phone number masked; never logged.
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## Points to make in the round
+| Topic | Answer |
+|---|---|
+| Why not `setInterval(() => setSeconds(s => s - 1))`? | JS timers drift under load and pause in the background. A decrementing counter shows 0:20 after 25 s in the background; `deadline - now` is always right (tested). |
+| Cleanup | `clearInterval` and `AppState` subscription removed in the effect cleanup. |
+| Security | The server enforces cooldown, expiry and attempt limits; the client only mirrors them for UX. Rate-limit per phone and per device; never log the code or full number. |
+| Autofill | iOS: `textContentType="oneTimeCode"`. Android: `autoComplete="sms-otp"`, or the SMS Retriever API (no SMS permission) via a native module for zero-tap. |
+| Accessibility | Errors are an assertive live region; the timer is polite; one labelled input instead of six. |
+| Native timers | For an exact background countdown (for example, a payment session), schedule a local notification or use a native timer; JS cannot run reliably while suspended. |
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
-
-Next: `git checkout 02-posts-list`.
+## Tests (13)
+Masking; resend unlocks after 30 s; background jump of 25 s shows 0:05 immediately on return; messy paste auto-submits once and verifies; wrong code shows attempts left; killing the app keeps the cooldown. Plus core tests and the app shell.
