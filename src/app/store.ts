@@ -1,11 +1,12 @@
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 
+import postsReducer from '../features/posts/state/postsSlice';
 import type { Services } from './services';
 
 // Feature reducers are registered here.
 const rootReducer = combineReducers({
-  app: (state: { ready: boolean } = { ready: true }) => state,
+  posts: postsReducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

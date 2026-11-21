@@ -1,33 +1,30 @@
-# Machine Round React Native: `01-minimal`
+# Machine Round React Native: `02-posts-list`
 
-Core infrastructure with no features. Start a round from here when you can bring a skeleton.
+A basic feature on top of `01-minimal`: fetch posts from `jsonplaceholder.typicode.com`, cache them in AsyncStorage (offline-first), and show loading, error with Retry, empty and success states with pull-to-refresh. State: **Redux Toolkit**.
 
 ```
-App.tsx                         Provider + SafeAreaProvider + NavigationContainer; services injectable
-src/
-  app/services.ts               Services (http, store) = DI, passed to thunks as extraArgument
-  app/store.ts                  makeStore(services), RootState, AppDispatch, typed hooks, ThunkConfig
-  navigation/RootNavigator.tsx  typed native-stack navigator
-  core/
-    error/appError.ts           AppError discriminated union + userMessage()
-    result.ts                   Result<T> = { ok: true, data } | { ok: false, error }
-    network/http.ts             axios instance, safeCall(), mapError()
-    storage/keyValueStore.ts    KeyValueStore (AsyncStorage + in-memory), readJson/writeJson
-    hooks/useDebouncedValue.ts  debounce that is instant for a blank value
-    ui/StateViews.tsx           LoadingView, ErrorView(retry), EmptyView, LoadMoreFooter, Button
-ui/theme.ts                     colors, spacing
-test/testServices.ts            fake services for tests
+features/posts/
+  domain/post.ts             Post + parsePost (validates untrusted JSON)
+  data/postApi.ts            fetchPosts (axios, AbortSignal-ready)
+  data/postRepository.ts     PostRepository: readCache(), refresh() -> Result
+  state/postsSlice.ts        loadCachedPosts, refreshPosts thunks; status/items/isRefreshing/error
+  ui/PostsScreen.tsx         FlatList + RefreshControl + state views
+  ui/PostRow.tsx             memoised row with a fixed height
 ```
 
-## Why these choices (be ready to defend them)
-- **Redux Toolkit:** slices remove boilerplate, `createAsyncThunk` gives pending/fulfilled/rejected, `createSelector` memoises derived data, and the DevTools time-travel is a strong debugging story. (Zustand + TanStack Query is a fine alternative: say when you would pick it.)
-- **DI through `thunk.extraArgument`:** thunks receive `{ http, store, …repositories }`. No module-level singletons, so tests just pass fakes to `makeStore`.
-- **`AppError` union + `Result<T>`:** repositories never throw; components switch on `error.kind`, and TypeScript checks every case.
-- **`KeyValueStore` interface:** AsyncStorage today; MMKV or SQLite later without touching features.
-- **Store created in `useState(() => …)`:** once per app, not on every render.
+## Data flow
+```
+mount ─► loadCachedPosts()  ─► cached items shown at once (status success)
+      └► refreshPosts()     ─► repo.refresh() ─► API ─► cache written ─► items replaced
+```
+- **Offline-first:** an error with cached data shows a banner over the list; with no cache, the full-screen error + Retry.
+- **Race:** a slow cache read never overwrites fresher network data (tested).
+- **`condition` on the thunk:** pull-to-refresh spam makes one request (tested), like Bloc's `droppable()`.
+- **Serialisable state:** errors are stored without the raw `cause` (`toStateError`).
+- **FlatList basics:** stable `keyExtractor`, `getItemLayout` (fixed row height), memoised `renderItem` and row, empty state inside the list so pull-to-refresh still works.
 
-## Testing notes
-- RNTL 14 + React 19: `await render(...)`, `await renderHook(...)`.
-- `jest.setup.ts` mocks AsyncStorage and safe-area insets; `transformIgnorePatterns` lets Jest compile the ESM builds of Redux, React Navigation and axios.
+## Tests (14)
+`safeCall`/`mapError` (5), debounce hook (1), slice (5: success, empty-cache failure, cached-data failure, cache-vs-network race, dropped duplicate refresh), screen through the real `App` (3: data, error + Retry, empty).
 
-Next: `git checkout 02-posts-list`.
+## Branch ladder
+`02-posts-list` → `feature/post-detail` → `feature/pagination-manual` → `feature/search-debounce` → `main`. `git diff <prev>..<next>` shows exactly one feature.

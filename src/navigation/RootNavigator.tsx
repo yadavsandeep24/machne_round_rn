@@ -1,26 +1,17 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
+
+import { PostsScreen } from '../features/posts/ui/PostsScreen';
 
 export type RootStackParamList = {
-  Home: undefined;
+  Posts: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function HomePlaceholder() {
-  return (
-    <View style={styles.center}>
-      <Text>Add your first feature in src/features/</Text>
-    </View>
-  );
-}
-
 export function RootNavigator() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={HomePlaceholder} options={{ title: 'Machine Round' }} />
+      <Stack.Screen name="Posts" component={PostsScreen} />
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({ center: { flex: 1, alignItems: 'center', justifyContent: 'center' } });

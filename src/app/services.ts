@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios';
 
 import { createHttp } from '../core/network/http';
 import { asyncStorageStore, type KeyValueStore } from '../core/storage/keyValueStore';
+import { createPostRepository, type PostRepository } from '../features/posts/data/postRepository';
 
 /**
  * Dependency injection without a container: everything a thunk needs is
@@ -10,8 +11,11 @@ import { asyncStorageStore, type KeyValueStore } from '../core/storage/keyValueS
 export interface Services {
   http: AxiosInstance;
   store: KeyValueStore;
+  postRepository: PostRepository;
 }
 
 export function createServices(): Services {
-  return { http: createHttp(), store: asyncStorageStore };
+  const http = createHttp();
+  const store = asyncStorageStore;
+  return { http, store, postRepository: createPostRepository(http, store) };
 }
