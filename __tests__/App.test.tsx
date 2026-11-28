@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react-native';
 import App from '../App';
 import { testServices } from '../test/testServices';
 
-test('app shell renders the home route', async () => {
+test('app shell renders the checkout screen', async () => {
   await render(<App services={testServices()} />);
-  expect(await screen.findByText('Add your first feature in src/features/')).toBeTruthy();
+  expect(await screen.findByText('Pay ₹1,499.00')).toBeTruthy();
 });
